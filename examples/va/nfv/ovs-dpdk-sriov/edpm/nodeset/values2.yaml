@@ -12,12 +12,12 @@ data:
   root_password: cmVkaGF0Cg==
   preProvisioned: false
   baremetalSetTemplate:
-    # osContainerImageUrl: taken_from_openstackversion registry-proxy.engineering.redhat.com/rh-osbs/rhoso18-edpm-hardened-uefi:18.0.0-17
-    ctlplaneInterface: enp130s0f0
+    #osContainerImageUrl: taken_from_openstackversion registry-proxy.engineering.redhat.com/rh-osbs/rhoso18-edpm-hardened-uefi:18.0.0-17
+    ctlplaneInterface: ens4f0
     cloudUserName: cloud-admin
     provisioningInterface: enp1s0
     bmhLabelSelector:
-      app: openstack
+      app: openstack-2
     passwordSecret:
       name: baremetalset-password-secret
       namespace: openstack
@@ -38,6 +38,9 @@ data:
         #       subscription-manager register --username <subscription_manager_username> \
         #         --password <subscription_manager_password>
         #       podman login -u <registry_username> -p <registry_password> registry.redhat.io
+        service_net_map:
+          nova_api_network: internalapi
+          nova_libvirt_network: internalapi
         timesync_ntp_servers:
           - hostname: clock.redhat.com
         # CPU pinning settings
@@ -57,29 +60,29 @@ data:
         edpm_ovs_dpdk_vhost_postcopy_support: "true"
         edpm_ovn_bridge_mappings: ['dpdkmgmt:br-link0','dpdkdata0:br-dpdk0','dpdkdata1:br-dpdk1']
         # edpm nfv sriov config
-        edpm_neutron_sriov_agent_SRIOV_NIC_physical_device_mappings: 'sriov1:enp6s0f2,sriov2:enp6s0f3,sriov-mlx-1:enp4s0f0np0,sriov-mlx-2:enp4s0f1np1'
+        edpm_neutron_sriov_agent_SRIOV_NIC_physical_device_mappings: 'sriov1:ens7f2,sriov2:ens7f3,sriov-mlx-1:ens6f0np0,sriov-mlx-2:ens6f0np1'
         # edpm_network_config
         # These vars are edpm_network_config role vars
         edpm_network_config_os_net_config_mappings:
           # Need to provide nic mapping based on system uuid or system product name
           # here used systetm uuid
-          compute-r730:
-            dmiString: "system-product-name"
-            id: "PowerEdge R730"
-            nic1: "eno1"
-            nic2: "eno2"
-            nic3: "enp130s0f0"
-            nic4: "enp130s0f1"
-            nic5: "enp130s0f2"
-            nic6: "enp130s0f3"
-            nic7: "enp6s0f0"
-            nic8: "enp6s0f1"
-            nic9: "enp6s0f2"
-            nic10: "enp6s0f3"
-            nic11: "enp4s0f0np0"
-            nic12: "enp4s0f1np1"
-            nic13: "enp8s0f0np0"
-            nic14: "enp8s0f1np1"
+          compute-r740:
+            dmiString: system-product-name
+            id: PowerEdge R740
+            nic1: eno1
+            nic2: eno2
+            nic3: ens4f0
+            nic4: ens4f1
+            nic5: ens4f2
+            nic6: ens4f3
+            nic7: ens7f0
+            nic8: ens7f1
+            nic9: ens7f2
+            nic10: ens7f3
+            nic11: ens6f0np0
+            nic12: ens6f1np1
+            nic13: ens1f0np0
+            nic14: ens1f1np1
         edpm_network_config_template: |
           ---
           {% set mtu_list = [ctlplane_mtu] %}
@@ -127,6 +130,7 @@ data:
             addresses:
               - ip_netmask: {{ lookup('vars', networks_lower['tenant'] ~ '_ip') }}/{{ lookup('vars', networks_lower['tenant'] ~ '_cidr') }}
             mtu: {{ lookup('vars', networks_lower['tenant'] ~ '_mtu') }}
+            rx_queue: 1
             members:
             - type: ovs_dpdk_bond
               name: dpdkbond0
@@ -148,7 +152,7 @@ data:
             name: br-dpdk0
             use_dhcp: false
             mtu: 9000
-            use_dhcp: false
+            rx_queue: 1
             members:
             - type: ovs_dpdk_port
               name: dpdk2
@@ -207,35 +211,51 @@ data:
         edpm_nodes_validation_validate_gateway_icmp: false
         dns_search_domains: []
         gather_facts: false
+        enable_debug: false
         # edpm firewall, change the allowed CIDR if needed
         edpm_sshd_configure_firewall: true
         edpm_sshd_allowed_ranges:
           - 192.168.122.0/24
         # SELinux module
         edpm_selinux_mode: enforcing
-        edpm_bootstrap_command: |-
-          # root CA
-          cd /etc/pki/ca-trust/source/anchors/
-          curl -LOk https://certs.corp.redhat.com/RH-IT-Root-CA.crt
-          curl -LOk https://certs.corp.redhat.com/certs/2022-IT-Root-CA.pem
-          update-ca-trust
+        edpm_bootstrap_command: |
+          cat > /etc/yum.repos.d/rhoso18-rhel9.repo << EOF
+          [rhosp-rhel-9.4-baseos]
+          name=Red Hat Enterprise Linux 9.4 - x86_64 - baseos
+          baseurl=http://download.eng.tlv.redhat.com/released/rhel-9/RHEL-9/9.4.0-Beta-1/BaseOS/x86_64/os/
+          enabled=1
+          gpgcheck=0
 
-          # install rhos-release repos
-          dnf --nogpgcheck --repofrompath=rhos-release,http://download.devel.redhat.com/rcm-guest/puddles/OpenStack/rhos-release/ --repo=rhos-release install -y rhos-release
-          rhos-release ceph-7.0-rhel-9 -r 9.4
+          [rhosp-rhel-9.4-appstream]
+          name=Red Hat Enterprise Linux 9.4 - x86_64 - appstream
+          baseurl=http://download.eng.tlv.redhat.com/released/rhel-9/RHEL-9/9.4.0-Beta-1/AppStream/x86_64/os/
+          enabled=1
+          gpgcheck=0
 
-          # Issue #2 - edpm_bootstrap fails if we don't update 'container-selinux'
-          dnf update -y
+          [rhosp-rhel-9.4-ha]
+          name=Red Hat Enterprise Linux 9.4 - x86_64 - HA
+          baseurl=http://download.eng.tlv.redhat.com/released/rhel-9/RHEL-9/9.4.0-Beta-1/HighAvailability/x86_64/os/
+          enabled=1
+          gpgcheck=0
 
-          rpm -ivh --nosignature http://download.devel.redhat.com/rcm-guest/puddles/OpenStack/rhos-release/rhos-release-latest.noarch.rpm
-          rhos-release ceph-7.0-rhel-9 -r 9.4
-          curl -o /etc/yum.repos.d/delorean.repo https://osp-trunk.hosted.upshift.rdu2.redhat.com/rhel9-osp18/current-podified/delorean.repo
-          echo "[osptrunk-candidate-deps]" >> "/etc/yum.repos.d/osptrunk-candidate-deps.repo"
-          echo "name=osptrunk-candidate-deps" >> "/etc/yum.repos.d/osptrunk-candidate-deps.repo"
-          echo "baseurl=http://download.eng.bos.redhat.com/brewroot/repos/rhos-18.0-rhel-9-trunk-candidate/latest/x86_64/" >> "/etc/yum.repos.d/osptrunk-candidate-deps.repo"
-          echo "gpgcheck=0" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
-          echo "enabled=1" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
-          echo "priority=1" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
+          [rhosp-rhel-9.4-fdp]
+          name=Red Hat Enterprise Linux Fast Datapath 9.4 - x86_64 fdp
+          baseurl=http://rhsm-pulp.corp.redhat.com/content/dist/layered/rhel9/x86_64/fast-datapath/os/
+          enabled=1
+          gpgcheck=0
+
+          [openstack-18.0-rhel9-dev-preview-3]
+          name=Red Hat Enterprise Linux Fast Datapath 9.4 - x86_64 fdp
+          baseurl=https://rhos-qe-mirror.lab.eng.tlv2.redhat.com/rcm-guest/puddles/OpenStack/18.0-RHEL-9/dev-preview-3/compose/OpenStack/x86_64/os/
+          enabled=1
+          gpgcheck=0
+          sslverify=0
+
+          [rhelosp-ceph-7-tools]
+          name=Ceph 7 Tools
+          baseurl=http://rhos-qe-mirror.lab.eng.tlv2.redhat.com/pulp/content/dist/layered/rhel9/x86_64/rhceph-tools/7/os/
+          enabled=1
+          gpgcheck=0
     networks:
       - defaultRoute: true
         name: ctlplane
@@ -247,8 +267,8 @@ data:
       - name: tenant
         subnetName: subnet1
     nodes:
-      edpm-compute-0:
-        hostName: edpm-compute-0
+      edpm-compute-1:
+        hostName: edpm-compute-1
     services:
       - bootstrap
       - download-cache
@@ -262,7 +282,7 @@ data:
       - run-os
       - install-certs
       - ovn
-      - neutron-ovn-igmp
+      - neutron-ovn
       - neutron-metadata
       - neutron-sriov
       - libvirt
@@ -288,12 +308,7 @@ data:
       # yamllint disable-line rule:line-length
       conf: |
         [pci]
-        device_spec = {"address": "0000:06:00.2", "physical_network":"sriov1", "trusted":"true"}
-        device_spec = {"address": "0000:06:00.3", "physical_network":"sriov2", "trusted":"true"}
-        device_spec = {"address": "0000:04:00.0", "physical_network":"sriov-mlx-1", "trusted":"true"}
-        device_spec = {"address": "0000:04:00.1", "physical_network":"sriov-mlx-2", "trusted":"true"}
-  neutron:
-    igmp:
-      conf: |
-        [ovs]
-        igmp_snooping_enable = False
+        device_spec = {"address": "0000:86:00.2", "physical_network":"sriov1", "trusted":"true"}
+        device_spec = {"address": "0000:86:00.3", "physical_network":"sriov2", "trusted":"true"}
+        device_spec = {"address": "0000:18:00.0", "physical_network":"sriov-mlx-1", "trusted":"true"}
+        device_spec = {"address": "0000:18:00.1", "physical_network":"sriov-mlx-2", "trusted":"true"}

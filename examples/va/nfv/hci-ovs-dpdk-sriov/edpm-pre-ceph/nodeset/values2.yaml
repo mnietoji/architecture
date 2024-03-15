@@ -12,12 +12,12 @@ data:
   root_password: cmVkaGF0Cg==
   preProvisioned: false
   baremetalSetTemplate:
-    # osContainerImageUrl: taken_from_openstackversion registry-proxy.engineering.redhat.com/rh-osbs/rhoso18-edpm-hardened-uefi:18.0.0-17
-    ctlplaneInterface: enp130s0f0
+    #osContainerImageUrl: taken_from_openstackversion registry-proxy.engineering.redhat.com/rh-osbs/rhoso18-edpm-hardened-uefi:18.0.0-17
+    ctlplaneInterface: ens4f0
     cloudUserName: cloud-admin
     provisioningInterface: enp1s0
     bmhLabelSelector:
-      app: openstack
+      app: openstack-2
     passwordSecret:
       name: baremetalset-password-secret
       namespace: openstack
@@ -57,29 +57,29 @@ data:
         edpm_ovs_dpdk_vhost_postcopy_support: "true"
         edpm_ovn_bridge_mappings: ['dpdkmgmt:br-link0','dpdkdata0:br-dpdk0','dpdkdata1:br-dpdk1']
         # edpm nfv sriov config
-        edpm_neutron_sriov_agent_SRIOV_NIC_physical_device_mappings: 'sriov1:enp6s0f2,sriov2:enp6s0f3,sriov-mlx-1:enp4s0f0np0,sriov-mlx-2:enp4s0f1np1'
+        edpm_neutron_sriov_agent_SRIOV_NIC_physical_device_mappings: 'sriov1:ens7f2,sriov2:ens7f3,sriov-mlx-1:ens6f0np0,sriov-mlx-2:ens6f0np1'
         # edpm_network_config
         # These vars are edpm_network_config role vars
         edpm_network_config_os_net_config_mappings:
           # Need to provide nic mapping based on system uuid or system product name
           # here used systetm uuid
-          compute-r730:
-            dmiString: "system-product-name"
-            id: "PowerEdge R730"
-            nic1: "eno1"
-            nic2: "eno2"
-            nic3: "enp130s0f0"
-            nic4: "enp130s0f1"
-            nic5: "enp130s0f2"
-            nic6: "enp130s0f3"
-            nic7: "enp6s0f0"
-            nic8: "enp6s0f1"
-            nic9: "enp6s0f2"
-            nic10: "enp6s0f3"
-            nic11: "enp4s0f0np0"
-            nic12: "enp4s0f1np1"
-            nic13: "enp8s0f0np0"
-            nic14: "enp8s0f1np1"
+          compute-r740:
+            dmiString: system-product-name
+            id: PowerEdge R740
+            nic1: eno1
+            nic2: eno2
+            nic3: ens4f0
+            nic4: ens4f1
+            nic5: ens4f2
+            nic6: ens4f3
+            nic7: ens7f0
+            nic8: ens7f1
+            nic9: ens7f2
+            nic10: ens7f3
+            nic11: ens6f0np0
+            nic12: ens6f1np1
+            nic13: ens1f0np0
+            nic14: ens1f1np1
         edpm_network_config_template: |
           ---
           {% set mtu_list = [ctlplane_mtu] %}
@@ -127,6 +127,7 @@ data:
             addresses:
               - ip_netmask: {{ lookup('vars', networks_lower['tenant'] ~ '_ip') }}/{{ lookup('vars', networks_lower['tenant'] ~ '_cidr') }}
             mtu: {{ lookup('vars', networks_lower['tenant'] ~ '_mtu') }}
+            rx_queue: 1
             members:
             - type: ovs_dpdk_bond
               name: dpdkbond0
@@ -148,7 +149,7 @@ data:
             name: br-dpdk0
             use_dhcp: false
             mtu: 9000
-            use_dhcp: false
+            rx_queue: 1
             members:
             - type: ovs_dpdk_port
               name: dpdk2
@@ -207,6 +208,7 @@ data:
         edpm_nodes_validation_validate_gateway_icmp: false
         dns_search_domains: []
         gather_facts: false
+        enable_debug: false
         # edpm firewall, change the allowed CIDR if needed
         edpm_sshd_configure_firewall: true
         edpm_sshd_allowed_ranges:
@@ -236,6 +238,19 @@ data:
           echo "gpgcheck=0" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
           echo "enabled=1" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
           echo "priority=1" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
+        edpm_ceph_hci_pre_enabled_services:
+          - ceph_mon
+          - ceph_mgr
+          - ceph_osd
+          - ceph_rgw
+          - ceph_nfs
+          - ceph_rgw_frontend
+          - ceph_nfs_frontend
+        storage_mtu: 9000
+        storage_mgmt_mtu: 9000
+        storage_mgmt_vlan_id: 145
+        storage_mgmt_cidr: "24"
+        storage_mgmt_host_routes: []
     networks:
       - defaultRoute: true
         name: ctlplane
@@ -247,8 +262,23 @@ data:
       - name: tenant
         subnetName: subnet1
     nodes:
-      edpm-compute-0:
-        hostName: edpm-compute-0
+      edpm-compute-1:
+        ansible:
+          ansibleHost: 192.168.122.101
+        hostName: edpm-compute-1
+        networks:
+          - defaultRoute: true
+            fixedIP: 192.168.122.101
+            name: ctlplane
+            subnetName: subnet1
+          - name: internalapi
+            subnetName: subnet1
+          - name: storage
+            subnetName: subnet1
+          - name: storagemgmt
+            subnetName: subnet1
+          - name: tenant
+            subnetName: subnet1
     services:
       - bootstrap
       - download-cache
@@ -257,6 +287,7 @@ data:
       - configure-network
       - validate-network
       - install-os
+      - ceph-hci-pre
       - configure-os
       - ssh-known-hosts
       - run-os
@@ -288,10 +319,10 @@ data:
       # yamllint disable-line rule:line-length
       conf: |
         [pci]
-        device_spec = {"address": "0000:06:00.2", "physical_network":"sriov1", "trusted":"true"}
-        device_spec = {"address": "0000:06:00.3", "physical_network":"sriov2", "trusted":"true"}
-        device_spec = {"address": "0000:04:00.0", "physical_network":"sriov-mlx-1", "trusted":"true"}
-        device_spec = {"address": "0000:04:00.1", "physical_network":"sriov-mlx-2", "trusted":"true"}
+        device_spec = {"address": "0000:86:00.2", "physical_network":"sriov1", "trusted":"true"}
+        device_spec = {"address": "0000:86:00.3", "physical_network":"sriov2", "trusted":"true"}
+        device_spec = {"address": "0000:18:00.0", "physical_network":"sriov-mlx-1", "trusted":"true"}
+        device_spec = {"address": "0000:18:00.1", "physical_network":"sriov-mlx-2", "trusted":"true"}
   neutron:
     igmp:
       conf: |

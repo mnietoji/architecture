@@ -1,0 +1,30 @@
+15c15
+<   name: ovs-dpdk-sriov-cpu-pinning-nova
+---
+>   name: ovs-dpdk-sriov-cpu-pinning-nova-2
+28c28
+<   name: sriov-nova
+---
+>   name: sriov-nova-2
+73c73
+<   name: openstack-edpm
+---
+>   name: openstack-edpm-2
+328d327
+<   - ssh-known-hosts
+336c335
+<   - nova-custom-ovsdpdksriov
+---
+>   - nova-custom-ovsdpdksriov-2
+342c341
+<   name: nova-custom-ovsdpdksriov
+---
+>   name: nova-custom-ovsdpdksriov-2
+347,349c346,348
+<   - ovs-dpdk-sriov-cpu-pinning-nova
+<   - sriov-nova
+<   label: nova-custom-ovsdpdksriov
+---
+>   - ovs-dpdk-sriov-cpu-pinning-nova-2
+>   - sriov-nova-2
+>   label: nova-custom-ovsdpdksriov-2

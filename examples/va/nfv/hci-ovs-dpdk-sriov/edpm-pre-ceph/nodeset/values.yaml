@@ -127,6 +127,7 @@ data:
             addresses:
               - ip_netmask: {{ lookup('vars', networks_lower['tenant'] ~ '_ip') }}/{{ lookup('vars', networks_lower['tenant'] ~ '_cidr') }}
             mtu: {{ lookup('vars', networks_lower['tenant'] ~ '_mtu') }}
+            rx_queue: 1
             members:
             - type: ovs_dpdk_bond
               name: dpdkbond0
@@ -148,7 +149,7 @@ data:
             name: br-dpdk0
             use_dhcp: false
             mtu: 9000
-            use_dhcp: false
+            rx_queue: 1
             members:
             - type: ovs_dpdk_port
               name: dpdk2
@@ -207,6 +208,7 @@ data:
         edpm_nodes_validation_validate_gateway_icmp: false
         dns_search_domains: []
         gather_facts: false
+        enable_debug: false
         # edpm firewall, change the allowed CIDR if needed
         edpm_sshd_configure_firewall: true
         edpm_sshd_allowed_ranges:
@@ -236,6 +238,19 @@ data:
           echo "gpgcheck=0" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
           echo "enabled=1" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
           echo "priority=1" >> /etc/yum.repos.d/osptrunk-candidate-deps.repo
+        edpm_ceph_hci_pre_enabled_services:
+          - ceph_mon
+          - ceph_mgr
+          - ceph_osd
+          - ceph_rgw
+          - ceph_nfs
+          - ceph_rgw_frontend
+          - ceph_nfs_frontend
+        storage_mtu: 9000
+        storage_mgmt_mtu: 9000
+        storage_mgmt_vlan_id: 145
+        storage_mgmt_cidr: "24"
+        storage_mgmt_host_routes: []
     networks:
       - defaultRoute: true
         name: ctlplane
@@ -248,7 +263,22 @@ data:
         subnetName: subnet1
     nodes:
       edpm-compute-0:
+        ansible:
+          ansibleHost: 192.168.122.100
         hostName: edpm-compute-0
+        networks:
+          - defaultRoute: true
+            fixedIP: 192.168.122.100
+            name: ctlplane
+            subnetName: subnet1
+          - name: internalapi
+            subnetName: subnet1
+          - name: storage
+            subnetName: subnet1
+          - name: storagemgmt
+            subnetName: subnet1
+          - name: tenant
+            subnetName: subnet1
     services:
       - bootstrap
       - download-cache
@@ -257,6 +287,7 @@ data:
       - configure-network
       - validate-network
       - install-os
+      - ceph-hci-pre
       - configure-os
       - ssh-known-hosts
       - run-os
