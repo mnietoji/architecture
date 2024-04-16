@@ -12,11 +12,11 @@ data:
   root_password: cmVkaGF0Cg==
   preProvisioned: false
   baremetalSetTemplate:
-    ctlplaneInterface: eno2  # CHANGEME
+    ctlplaneInterface: ens1f1
     cloudUserName: cloud-admin
-    provisioningInterface: enp1s0  # CHANGEME
+    provisioningInterface: enp1s0
     bmhLabelSelector:
-      app: openstack  # CHANGEME
+      app: openstack
     passwordSecret:
       name: baremetalset-password-secret
       namespace: openstack
@@ -44,32 +44,33 @@ data:
           - hostname: clock.redhat.com
         # CPU pinning settings
         # edpm nfv ovs dpdk config
-        # CHANGEME
         # yamllint disable-line rule:line-length
-        edpm_kernel_args: "default_hugepagesz=1GB hugepagesz=1G hugepages=64 iommu=pt intel_iommu=on tsx=off isolcpus=2-11,14-23"
+        edpm_kernel_args: "default_hugepagesz=1GB hugepagesz=1G hugepages=64 iommu=pt intel_iommu=on tsx=off isolcpus=2-47,50-95"
         edpm_tuned_profile: "cpu-partitioning-powersave"
-        edpm_tuned_isolated_cores: "2-11,14-23"
+        edpm_tuned_isolated_cores: "2-47,50-95"
         edpm_nova_libvirt_qemu_group: "hugetlbfs"
-        edpm_ovs_dpdk_pmd_core_list: "1,13,2,14,3,15"
+        edpm_ovs_dpdk_pmd_core_list: "2,3,50,51"
         edpm_ovs_dpdk_socket_memory: "4096"
         edpm_ovs_dpdk_memory_channels: "4"
         edpm_ovs_dpdk_vhost_postcopy_support: "true"
         edpm_ovn_bridge_mappings: ['dpdk2:br-link2', 'dpdk1:br-link1']
         # edpm nfv sriov config
-        edpm_neutron_sriov_agent_SRIOV_NIC_physical_device_mappings: 'sriov1:eno5,sriov2:eno6'
+        edpm_neutron_sriov_agent_SRIOV_NIC_physical_device_mappings: 'sriov1:ens2f0np0,sriov2:ens2f1np1'
         # edpm_network_config
         # These vars are edpm_network_config role vars
         edpm_network_config_hide_sensitive_logs: false
         edpm_network_config_os_net_config_mappings:
           # Need to provide nic mapping based on system uuid or system product name
           # here used systetm uuid
-          edpm-compute-0:  # CHANGEME
-            nic1: 6c:fe:54:3f:8a:01  # CHANGEME
-            nic2: 6c:fe:54:3f:8a:02  # CHANGEME
-            nic3: 6c:fe:54:3f:8a:03  # CHANGEME
-            nic4: 6c:fe:54:3f:8a:04  # CHANGEME
-            nic5: 6c:fe:54:3f:8a:05  # CHANGEME
-            nic6: 6c:fe:54:3f:8a:06  # CHANGEME
+          dellr750:
+            dmiString: system-product-name
+            id: PowerEdge R750
+            nic1: eno8303
+            nic2: ens1f1
+            nic3: ens1f2
+            nic4: ens1f3
+            nic5: ens2f0np0
+            nic6: ens2f1np1
         edpm_network_config_template: |
           ---
           {% set mtu_list = [ctlplane_mtu] %}
@@ -78,6 +79,10 @@ data:
           {%- endfor %}
           {% set min_viable_mtu = mtu_list | max %}
           network_config:
+          - type: interface
+            name: nic1
+            use_dhcp: false
+            default: false
           - type: ovs_bridge
             name: {{ neutron_physical_bridge_name }}
             mtu: {{ min_viable_mtu }}
@@ -98,7 +103,7 @@ data:
               mtu: {{ lookup('vars', networks_lower[network] ~ '_mtu') }}
               vlan_id: {{ lookup('vars', networks_lower[network] ~ '_vlan_id') }}
               addresses:
-                - ip_netmask: {{ lookup('vars', networks_lower[network] ~ '_ip') }}/{{ lookup('vars', networks_lower[network] ~ '_cidr') }}
+              - ip_netmask: {{ lookup('vars', networks_lower[network] ~ '_ip') }}/{{ lookup('vars', networks_lower[network] ~ '_cidr') }}
               routes: {{ lookup('vars', networks_lower[network] ~ '_host_routes') }}
           {% endfor %}
           - type: ovs_user_bridge
@@ -106,11 +111,11 @@ data:
             use_dhcp: false
             ovs_extra: "set port br-link1 tag={{ lookup('vars', networks_lower['tenant'] ~ '_vlan_id') }}"
             addresses:
-              - ip_netmask: {{ lookup('vars', networks_lower['tenant'] ~ '_ip') }}/{{ lookup('vars', networks_lower['tenant'] ~ '_cidr') }}
-            mtu: {{ lookup('vars', networks_lower['tenant'] ~ '_mtu') }}
-            rx_queue: 1
+            - ip_netmask: {{ lookup('vars', networks_lower['tenant'] ~ '_ip') }}/{{ lookup('vars', networks_lower['tenant'] ~ '_cidr') }}
+            mtu: 9000
             members:
             - type: ovs_dpdk_port
+              rx_queue: 1
               name: dpdk1
               members:
               - type: interface
@@ -119,9 +124,9 @@ data:
             name: br-link2
             use_dhcp: false
             mtu: 9000
-            rx_queue: 1
             members:
             - type: ovs_dpdk_port
+              rx_queue: 1
               name: dpdk2
               members:
               - type: interface
@@ -131,13 +136,11 @@ data:
             numvfs: 10
             mtu: 9000
             use_dhcp: false
-            promisc: true
           - type: sriov_pf
             name: nic6
             numvfs: 10
             mtu: 9000
             use_dhcp: false
-            promisc: true
         # These vars are for the network config templates themselves and are
         # considered EDPM network defaults.
         neutron_physical_bridge_name: br-ex
@@ -145,6 +148,7 @@ data:
         # edpm_nodes_validation
         edpm_nodes_validation_validate_controllers_icmp: false
         edpm_nodes_validation_validate_gateway_icmp: false
+        edpm_reboot_post_reboot_delay: 120
         dns_search_domains: []
         gather_facts: false
         enable_debug: false
@@ -170,6 +174,7 @@ data:
       edpm-compute-1:
         hostName: edpm-compute-1
     services:
+      - repo-setup
       - bootstrap
       - download-cache
       - reboot-os
@@ -192,16 +197,16 @@ data:
         [DEFAULT]
         reserved_host_memory_mb = 4096
         [compute]
-        cpu_shared_set = 0-3,24-27
-        cpu_dedicated_set = 8-23,32-47
+        cpu_shared_set = 0,1,48,49
+        cpu_dedicated_set = 4-47,52-95
         [neutron]
-        physnets = dpdk1, dpdk2 # CHANGEME
-        [neutron_physnet_dpdk1] # CHANGEME
-        numa_nodes = 0 # CHANGEME
-        [neutron_physnet_dpdk2] # CHANGEME
-        numa_nodes = 0 # CHANGEME
-        [neutron_tunnel] # CHANGEME
-        numa_nodes = 0 # CHANGEME
+        physnets = dpdk1,dpdk2
+        [neutron_physnet_dpdk1]
+        numa_nodes = 0
+        [neutron_physnet_dpdk2]
+        numa_nodes = 0
+        [neutron_tunnel]
+        numa_nodes = 0
     migration:
       ssh_keys:
         private: CHANGEME4
@@ -210,5 +215,5 @@ data:
       # yamllint disable-line rule:line-length
       conf: |
         [pci]
-        device_spec = {"vendor_id":"8086", "product_id":"1572", "address": "0000:19:00.3", "physical_network":"sriov1", "trusted":"true"}  # CHANGEME
-        device_spec = {"vendor_id":"8086", "product_id":"1572", "address": "0000:20:00.3", "physical_network":"sriov2", "trusted":"true"}  # CHANGEME
+        device_spec = {"vendor_id":"15b3", "address": "0000:17:00.0", "physical_network":"sriov1", "trusted":"true"}
+        device_spec = {"vendor_id":"15b3", "address": "0000:17:00.1", "physical_network":"sriov2", "trusted":"true"}

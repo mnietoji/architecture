@@ -22,14 +22,15 @@ data:
       mechanism_drivers = ovn,sriovnicswitch
       [ovn]
       vhost_sock_dir = /var/lib/vhost_sockets
+      enable_distributed_floating_ip=False
       [ml2_type_vlan]
-      network_vlan_ranges = dpdk1:206:209,dpdk2:206:209,sriov1,sriov2 # CHANGEME
+      network_vlan_ranges = access:435:435,dpdk1:56:59,dpdk2:56:59,sriov1:56:59,sriov2:56:59
       [oslo_policy]
       policy_file=/etc/neutron/policy.d/policy.yaml
   ovn:
     ovnController:
       nicMappings:
-        datacentre: enp4s0  # CHANGEME
+        access: enp6s0
   glance:
     customServiceConfig: |
       [DEFAULT]
